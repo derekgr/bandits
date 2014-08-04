@@ -5,14 +5,10 @@ import (
 )
 
 func main() {
-	experiment := NewExperiment("google example")
-	experiment.AddBandit(NewBandit("4%", 0.040))
-	experiment.AddBandit(NewBandit("5%", 0.050))
-	experiment.AddBandit(NewBandit("4.5%", 0.045))
-	experiment.AddBandit(NewBandit("3%", 0.030))
-	experiment.AddBandit(NewBandit("2%", 0.020))
-	experiment.AddBandit(NewBandit("3.5%", 0.035))
+	experiment := NewExperiment("console")
+	experiment.AddBandit(NewBandit("control-pre-avatar", 15076, 481687))
+	experiment.AddBandit(NewBandit("test-pre-avatar", 5011, 161368))
 
-	winner := pickOptimalVariant(experiment, 50000)
+	winner := pickOptimalVariant(experiment, 1000)
 	fmt.Printf("%v\n", winner)
 }

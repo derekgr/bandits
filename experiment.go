@@ -2,14 +2,19 @@ package main
 
 import (
 	"fmt"
+	"sort"
+	"bytes"
 )
 
 type Experiment struct {
 	Name    string
 	Bandits []*Bandit
+
+	observations [][]float64
 }
 
 type Result struct {
+	Experiment              *Experiment
 	Optimal                 *Bandit
 	ExpectedValue           float64
 	PotentialValueRemaining float64
@@ -17,29 +22,28 @@ type Result struct {
 }
 
 func NewExperiment(name string) *Experiment {
-	return &Experiment{name, []*Bandit{}}
+	return &Experiment{name, []*Bandit{}, nil}
 }
 
 func (e *Experiment) AddBandit(arm *Bandit) {
 	e.Bandits = append(e.Bandits, arm)
 }
 
-func (e *Experiment) optimalVariant() (maxVariant *Bandit, maxVariantSample float64) {
+func (e *Experiment) optimalVariant() (maxVariant *Bandit, maxVariantIndex int, maxVariantSample float64, observations []float64) {
 	var sample float64
 	maxVariant = nil
 	maxVariantSample = 0.0
+	observations = make([]float64, len(e.Bandits))
 
-	for _, variant := range e.Bandits {
+	for i, variant := range e.Bandits {
+		sample = variant.Observe()
+		observations[i] = sample
+
 		// Find the variant that generates the highest value from Thompson sampling.
-		if maxVariant == nil {
+		if (maxVariant == nil) || (sample > maxVariantSample) {
 			maxVariant = variant
-			maxVariantSample = variant.estimatedConversionRate()
-		} else {
-			sample = variant.estimatedConversionRate()
-			if sample > maxVariantSample {
-				maxVariant = variant
-				maxVariantSample = sample
-			}
+			maxVariantSample = sample
+			maxVariantIndex = i
 		}
 	}
 
@@ -48,17 +52,54 @@ func (e *Experiment) optimalVariant() (maxVariant *Bandit, maxVariantSample floa
 }
 
 func pickOptimalVariant(experiment *Experiment, iterations int) Result {
-	for i := 0; i < iterations; i++ {
-		// Find the arm with highest expected reward for the next pull.
-		maxVariant, _ := experiment.optimalVariant()
+	experiment.observations = make([][]float64, iterations)
+	bandits := len(experiment.Bandits)
 
-		// Pull the chosen arm, and update its estimated conversion rate based on the observation.
-		maxVariant.observe()
-		maxVariant.updateBetaParams()
+
+	maxObs := 0.0
+	maxVariantIndex := 0
+	valueDist := make([]float64, iterations)
+	for i := 0; i < iterations; i++ {
+		maxVariantIndex = 0
+
+		// Sample every arm.
+		observations := make([]float64, bandits)
+		for j := 0; j < bandits; j++ {
+			observations[j] = experiment.Bandits[j].Observe()
+			if (j == 0 || maxObs < observations[j]) {
+				maxVariantIndex = j
+			}
+		}
+		experiment.observations[i] = observations
 	}
 
-	maxVariant, maxVariantSample := experiment.optimalVariant()
-	return Result{maxVariant, maxVariantSample, 0.0, iterations}
+	maxVariant := experiment.Bandits[maxVariantIndex]
+
+    // Calculate the PVR remaining as the 95th percentile of the
+	// posterior distribution of (t_max - t*)/t*, where t_max is the largest
+	// observed arm sample for a given round of sampling, and t* is
+	// the observation in the same round for the arm chosen as most likely to be optimal.
+	for i := 0; i < iterations; i++ {
+		observations := experiment.observations[i]
+
+		// Find the maximal observation.
+		for j := 0; j < bandits; j++ {
+			if (j == 0) || (maxObs < observations[j]) {
+				maxObs = observations[j]
+			}
+		}
+
+		// Append (t_max-t*/t*) to our value distribution.
+		optimalArmObs := observations[maxVariantIndex]
+		valueDist[i] = (maxObs - optimalArmObs)/optimalArmObs
+	}
+
+	// Take the value at the 95th percentile.
+	sort.Float64s(valueDist)
+	p95th := (0.95 * float64(iterations))
+	pvr := valueDist[int(p95th)]
+
+	return Result{experiment, maxVariant, maxObs, pvr, iterations}
 }
 
 func (e *Experiment) String() string {
@@ -66,5 +107,15 @@ func (e *Experiment) String() string {
 }
 
 func (r Result) String() string {
-	return fmt.Sprintf("winner with expected conversion %f after %d observations: %v", r.ExpectedValue, r.Observations, r.Optimal)
+	var buffer bytes.Buffer
+
+	fmt.Fprintf(&buffer, "observations: %d  pvr: %f\n", r.Observations, r.PotentialValueRemaining)
+	fmt.Fprintf(&buffer, "win:\tname %s\tsucc %d\tobs %d\test conversion rate %f\n", r.Optimal.Name, r.Optimal.Rewards, r.Optimal.Observations, r.ExpectedValue)
+	for i := 0; i < len(r.Experiment.Bandits); i++ {
+		bandit := r.Experiment.Bandits[i]
+		if bandit != r.Optimal {
+			fmt.Fprintf(&buffer, "arm:\tname %s\tsucc %d\tobs %d\test conversion rate %f\n", bandit.Name, bandit.Rewards, bandit.Observations, bandit.Observe())
+		}
+	}
+	return buffer.String()
 }
