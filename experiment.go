@@ -99,8 +99,17 @@ func (r Result) String() string {
 	var buffer bytes.Buffer
 
 	fmt.Fprintf(&buffer, "%s\n", r.Experiment.String())
-	fmt.Fprintf(&buffer, "observations: %d\npotential value remaining: %f\n", r.Observations, r.PotentialValueRemaining)
+	fmt.Fprintf(&buffer, "observations: %d\npotential value remaining: %f\n\n", r.Observations, r.PotentialValueRemaining)
 	fmt.Fprintf(&buffer, "win:\t%s\n", r.Optimal.String())
+
+	// TODO: be smart about finding control
+	if r.Optimal != r.Experiment.Bandits[0] {
+		relDiff, absDiff := r.Optimal.Compare(r.Experiment.Bandits[0])
+		fmt.Fprintf(&buffer, "\n\t         ntile: %8d %8d %8d\n", 5, 50, 95)
+		fmt.Fprintf(&buffer, "\trel to control: %3.6f %3.6f %3.6f\n", relDiff[0], relDiff[1], relDiff[2])
+		fmt.Fprintf(&buffer, "\t           abs: %3.6f %3.6f %3.6f\n\n", absDiff[0], absDiff[1], absDiff[2])
+	}
+
 	for i := 0; i < len(r.Experiment.Bandits); i++ {
 		bandit := r.Experiment.Bandits[i]
 		if bandit != r.Optimal {
