@@ -1,16 +1,16 @@
 package main
 
 import (
-	"fmt"
-	"sort"
 	"bytes"
+	"fmt"
+	"math/rand"
+	"sort"
+	"time"
 )
 
 type Experiment struct {
 	Name    string
 	Bandits []*Bandit
-
-	observations [][]float64
 }
 
 type Result struct {
@@ -22,38 +22,18 @@ type Result struct {
 }
 
 func NewExperiment(name string) *Experiment {
-	return &Experiment{name, []*Bandit{}, nil}
+	return &Experiment{name, []*Bandit{}}
 }
 
 func (e *Experiment) AddBandit(arm *Bandit) {
 	e.Bandits = append(e.Bandits, arm)
 }
 
-func (e *Experiment) optimalVariant() (maxVariant *Bandit, maxVariantIndex int, maxVariantSample float64, observations []float64) {
-	var sample float64
-	maxVariant = nil
-	maxVariantSample = 0.0
-	observations = make([]float64, len(e.Bandits))
+func (e *Experiment) pickOptimalVariant(iterations int) Result {
+	rand.Seed(time.Now().UTC().UnixNano())
 
-	for i, variant := range e.Bandits {
-		sample = variant.Observe()
-		observations[i] = sample
-
-		// Find the variant that generates the highest value from Thompson sampling.
-		if (maxVariant == nil) || (sample > maxVariantSample) {
-			maxVariant = variant
-			maxVariantSample = sample
-			maxVariantIndex = i
-		}
-	}
-
-	maxVariant.Chosen++
-	return
-}
-
-func pickOptimalVariant(experiment *Experiment, iterations int) Result {
-	experiment.observations = make([][]float64, iterations)
-	bandits := len(experiment.Bandits)
+	allObservations := make([][]float64, iterations)
+	bandits := len(e.Bandits)
 
 	maxObs := 0.0
 	maxVariantIndex := 0
@@ -64,32 +44,32 @@ func pickOptimalVariant(experiment *Experiment, iterations int) Result {
 		// Sample every arm.
 		observations := make([]float64, bandits)
 		for j := 0; j < bandits; j++ {
-			observations[j] = experiment.Bandits[j].Observe()
-			if (j == 0 || maxObs < observations[j]) {
+			observations[j] = e.Bandits[j].Observe()
+			if j == 0 || maxObs < observations[j] {
 				maxVariantIndex = j
 				maxObs = observations[j]
 			}
 		}
 
-		experiment.observations[i] = observations
+		allObservations[i] = observations
 		counts[maxVariantIndex]++
 	}
 
 	maxCount := 0
 	for i := 0; i < bandits; i++ {
-		if (i == 0 || maxCount < counts[i]) {
+		if i == 0 || maxCount < counts[i] {
 			maxCount = counts[i]
 			maxVariantIndex = i
 		}
 	}
 
-	maxVariant := experiment.Bandits[maxVariantIndex]
+	maxVariant := e.Bandits[maxVariantIndex]
 	// Calculate the PVR remaining as the 95th percentile of the
 	// posterior distribution of (t_max - t*)/t*, where t_max is the largest
 	// observed arm sample for a given round of sampling, and t* is
 	// the observation in the same round for the arm chosen as most likely to be optimal.
 	for i := 0; i < iterations; i++ {
-		observations := experiment.observations[i]
+		observations := allObservations[i]
 
 		// Find the maximal observation.
 		for j := 0; j < bandits; j++ {
@@ -100,7 +80,7 @@ func pickOptimalVariant(experiment *Experiment, iterations int) Result {
 
 		// Append (t_max-t*/t*) to our value distribution.
 		optimalArmObs := observations[maxVariantIndex]
-		valueDist[i] = (maxObs - optimalArmObs)/optimalArmObs
+		valueDist[i] = (maxObs - optimalArmObs) / optimalArmObs
 	}
 
 	// Take the value at the 95th percentile.
@@ -108,7 +88,7 @@ func pickOptimalVariant(experiment *Experiment, iterations int) Result {
 	p95th := (0.95 * float64(iterations))
 	pvr := valueDist[int(p95th)]
 
-	return Result{experiment, maxVariant, maxObs, pvr, iterations}
+	return Result{e, maxVariant, maxObs, pvr, iterations}
 }
 
 func (e *Experiment) String() string {

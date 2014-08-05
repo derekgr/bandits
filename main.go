@@ -1,18 +1,59 @@
 package main
 
 import (
+	"bufio"
+	"flag"
 	"fmt"
-	"time"
-	"math/rand"
+	"os"
+	"strconv"
+	"strings"
 )
 
 func main() {
-	rand.Seed(time.Now().UTC().UnixNano())
+	var (
+		experimentName = flag.String("name", "console", "Experiment name")
+		iterations     = flag.Int("iter", 10000, "Iterations of sampling")
+	)
 
-	experiment := NewExperiment("console")
-	experiment.AddBandit(NewBandit("control-pre-avatar", 15076, 481687))
-	experiment.AddBandit(NewBandit("test-pre-avatar", 5011, 161368))
+	flag.Usage = func() {
+		fmt.Printf("%s [--iter iterations] [--name experiment-name] [csv-file]\n\n"+
+			"If csv-file is omitted, data will be read from STDIN.\n"+
+			"The expected format is CSV, with one row per bandit, and each row being:\n"+
+			"arm_name,arm_successes,arm_total_trials\n\n", os.Args[0])
+		flag.PrintDefaults()
+	}
 
-	winner := pickOptimalVariant(experiment, 50000)
-	fmt.Printf("%v\n", winner)
+	flag.Parse()
+
+	experiment := NewExperiment(*experimentName)
+	file := os.Stdin
+	if len(flag.Args()) > 0 {
+		var err error
+		file, err = os.Open(flag.Args()[0])
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		parts := strings.Split(scanner.Text(), ",")
+		if len(parts) != 3 {
+			panic(fmt.Errorf("Malformed input line: %s", scanner.Text()))
+		}
+		successes, err := strconv.Atoi(parts[1])
+		if err != nil {
+			panic(err)
+		}
+
+		trials, err := strconv.Atoi(parts[2])
+		if err != nil {
+			panic(err)
+		}
+
+		experiment.AddBandit(NewBandit(parts[0], int64(successes), int64(trials)))
+	}
+
+	winner := experiment.pickOptimalVariant(*iterations)
+	fmt.Printf("%s\n", winner.String())
 }

@@ -38,12 +38,12 @@ func (b *Bandit) Mean() (mean float64, stdDev float64) {
 		total += b.Observe()
 	}
 
-	mean = total/float64(MeanIterations);
+	mean = total / float64(MeanIterations)
 	for i := 0; i < MeanIterations; i++ {
-		stdDev += math.Pow(obs[i] - mean, 2)
+		stdDev += math.Pow(obs[i]-mean, 2)
 	}
 
-	stdDev = math.Sqrt(stdDev/float64(MeanIterations))
+	stdDev = math.Sqrt(stdDev / float64(MeanIterations))
 
 	return
 }
@@ -55,7 +55,7 @@ func (b *Bandit) updateBetaParams() {
 
 func (b *Bandit) String() string {
 	mean, stddev := b.Mean()
-	return fmt.Sprintf("%24s succ %10d trials %10d mean %3.6f +/- %3.6f",
+	return fmt.Sprintf("%24s succ %10d trials %10d\tmean %3.6f +/- %3.6f",
 		b.Name,
 		b.Rewards,
 		b.Observations,
