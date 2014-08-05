@@ -55,26 +55,35 @@ func pickOptimalVariant(experiment *Experiment, iterations int) Result {
 	experiment.observations = make([][]float64, iterations)
 	bandits := len(experiment.Bandits)
 
-
 	maxObs := 0.0
 	maxVariantIndex := 0
 	valueDist := make([]float64, iterations)
-	for i := 0; i < iterations; i++ {
-		maxVariantIndex = 0
+	counts := make([]int, bandits)
 
+	for i := 0; i < iterations; i++ {
 		// Sample every arm.
 		observations := make([]float64, bandits)
 		for j := 0; j < bandits; j++ {
 			observations[j] = experiment.Bandits[j].Observe()
 			if (j == 0 || maxObs < observations[j]) {
 				maxVariantIndex = j
+				maxObs = observations[j]
 			}
 		}
+
 		experiment.observations[i] = observations
+		counts[maxVariantIndex]++
+	}
+
+	maxCount := 0
+	for i := 0; i < bandits; i++ {
+		if (i == 0 || maxCount < counts[i]) {
+			maxCount = counts[i]
+			maxVariantIndex = i
+		}
 	}
 
 	maxVariant := experiment.Bandits[maxVariantIndex]
-
     // Calculate the PVR remaining as the 95th percentile of the
 	// posterior distribution of (t_max - t*)/t*, where t_max is the largest
 	// observed arm sample for a given round of sampling, and t* is
