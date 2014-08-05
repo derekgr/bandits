@@ -112,18 +112,19 @@ func pickOptimalVariant(experiment *Experiment, iterations int) Result {
 }
 
 func (e *Experiment) String() string {
-	return fmt.Sprintf("experiment %s, %d arms", e.Name, len(e.Bandits))
+	return fmt.Sprintf("experiment \"%s\", %d arms", e.Name, len(e.Bandits))
 }
 
 func (r Result) String() string {
 	var buffer bytes.Buffer
 
-	fmt.Fprintf(&buffer, "observations: %d  pvr: %f\n", r.Observations, r.PotentialValueRemaining)
-	fmt.Fprintf(&buffer, "win:\tname %s\tsucc %d\tobs %d\test conversion rate %f\n", r.Optimal.Name, r.Optimal.Rewards, r.Optimal.Observations, r.ExpectedValue)
+	fmt.Fprintf(&buffer, "%s\n", r.Experiment.String())
+	fmt.Fprintf(&buffer, "observations: %d\npotential value remaining: %f\n", r.Observations, r.PotentialValueRemaining)
+	fmt.Fprintf(&buffer, "win:\t%s\n", r.Optimal.String())
 	for i := 0; i < len(r.Experiment.Bandits); i++ {
 		bandit := r.Experiment.Bandits[i]
 		if bandit != r.Optimal {
-			fmt.Fprintf(&buffer, "arm:\tname %s\tsucc %d\tobs %d\test conversion rate %f\n", bandit.Name, bandit.Rewards, bandit.Observations, bandit.Observe())
+			fmt.Fprintf(&buffer, "arm:\t%s\n", bandit.String())
 		}
 	}
 	return buffer.String()
