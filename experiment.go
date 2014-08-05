@@ -84,7 +84,7 @@ func pickOptimalVariant(experiment *Experiment, iterations int) Result {
 	}
 
 	maxVariant := experiment.Bandits[maxVariantIndex]
-    // Calculate the PVR remaining as the 95th percentile of the
+	// Calculate the PVR remaining as the 95th percentile of the
 	// posterior distribution of (t_max - t*)/t*, where t_max is the largest
 	// observed arm sample for a given round of sampling, and t* is
 	// the observation in the same round for the arm chosen as most likely to be optimal.
